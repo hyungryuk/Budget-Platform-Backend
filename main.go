@@ -24,8 +24,8 @@ func rateLimiter(rps int, burst int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		v, _ := limiters.LoadOrStore(ip, rate.NewLimiter(rate.Limit(rps), burst))
-		limiter := v.(*rate.Limiter)
-		if !limiter.Allow() {
+		limiter, ok := v.(*rate.Limiter)
+		if !ok || !limiter.Allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
 			c.Abort()
 			return
