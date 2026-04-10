@@ -1,4 +1,7 @@
+version: "2"
+
 linters:
+  default: none
   enable:
     - errcheck
     - gosimple
@@ -6,10 +9,9 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
+  settings:
+    errcheck:
+      check-type-assertions: true
 
 issues:
   max-issues-per-linter: 0
