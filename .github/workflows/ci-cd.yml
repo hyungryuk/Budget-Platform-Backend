@@ -3,6 +3,7 @@ name: CI/CD
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
   pull_request:
     branches: [main]
 
@@ -40,7 +41,7 @@ jobs:
   build-and-push:
     needs: [test, lint]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       packages: write
@@ -59,12 +60,12 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ github.ref_name }}
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v4
 
@@ -82,12 +83,12 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GHCR_TOKEN,IMAGE,SHA
+          envs: GHCR_TOKEN,IMAGE,VERSION
           script: |
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            APP_IMAGE=$IMAGE:$SHA docker compose -f /app/docker-compose.prod.yml pull
-            APP_IMAGE=$IMAGE:$SHA docker compose -f /app/docker-compose.prod.yml up -d
+            APP_IMAGE=$IMAGE:$VERSION docker compose -f /app/docker-compose.prod.yml pull
+            APP_IMAGE=$IMAGE:$VERSION docker compose -f /app/docker-compose.prod.yml up -d
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           IMAGE: ${{ env.IMAGE }}
-          SHA: ${{ github.sha }}
+          VERSION: ${{ github.ref_name }}
