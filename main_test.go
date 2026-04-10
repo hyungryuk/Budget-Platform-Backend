@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,15 +20,14 @@ func setupRouter(rdb *redis.Client) *gin.Engine {
 	return r
 }
 
-func newTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
+func newTestRedis(t *testing.T) *redis.Client {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	return mr, rdb
+	return redis.NewClient(&redis.Options{Addr: mr.Addr()})
 }
 
 func TestHandleMessage_Success(t *testing.T) {
-	mr, rdb := newTestRedis(t)
+	rdb := newTestRedis(t)
 
 	r := setupRouter(rdb)
 	body, _ := json.Marshal(map[string]string{"text": "hello world"})
@@ -41,14 +41,17 @@ func TestHandleMessage_Success(t *testing.T) {
 		t.Fatalf("expected 202, got %d", w.Code)
 	}
 
-	items := mr.Lrange(queueKey, 0, -1)
+	items, err := rdb.LRange(context.Background(), queueKey, 0, -1).Result()
+	if err != nil {
+		t.Fatalf("redis error: %v", err)
+	}
 	if len(items) != 1 || items[0] != "hello world" {
 		t.Fatalf("expected queue to contain 'hello world', got %v", items)
 	}
 }
 
 func TestHandleMessage_MissingText(t *testing.T) {
-	_, rdb := newTestRedis(t)
+	rdb := newTestRedis(t)
 
 	r := setupRouter(rdb)
 	body, _ := json.Marshal(map[string]string{})
@@ -64,7 +67,7 @@ func TestHandleMessage_MissingText(t *testing.T) {
 }
 
 func TestHandleMessage_InvalidJSON(t *testing.T) {
-	_, rdb := newTestRedis(t)
+	rdb := newTestRedis(t)
 
 	r := setupRouter(rdb)
 	req := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader([]byte("not-json")))
