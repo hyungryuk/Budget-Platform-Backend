@@ -4,7 +4,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - REDIS_ADDR=redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     depends_on:
       - redis
     restart: always
@@ -17,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 60 1
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 60 1 --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis-data:/data
     mem_limit: 128m

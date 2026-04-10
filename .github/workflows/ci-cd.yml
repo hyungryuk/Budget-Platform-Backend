@@ -83,12 +83,15 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GHCR_TOKEN,IMAGE,VERSION
+          envs: GHCR_TOKEN,IMAGE,VERSION,REDIS_PASSWORD
           script: |
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "REDIS_PASSWORD=$REDIS_PASSWORD" > /app/.env
+            chmod 600 /app/.env
             APP_IMAGE=$IMAGE:$VERSION docker compose -f /app/docker-compose.prod.yml pull
             APP_IMAGE=$IMAGE:$VERSION docker compose -f /app/docker-compose.prod.yml up -d
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           IMAGE: ${{ env.IMAGE }}
           VERSION: ${{ github.ref_name }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
