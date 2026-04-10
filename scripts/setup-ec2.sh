@@ -2,6 +2,9 @@
 set -e
 
 # Run this once on a fresh EC2 instance (Amazon Linux 2023)
+# Usage: sudo bash setup-ec2.sh your-domain.com
+
+DOMAIN=${1:-""}
 
 # Install Docker
 dnf update -y
@@ -24,38 +27,21 @@ usermod -aG docker ec2-user
 mkdir -p /app
 chown ec2-user:ec2-user /app
 
-# Install Nginx
-dnf install -y nginx
+# Install Nginx and Certbot
+dnf install -y nginx python3-certbot-nginx
 
-# Generate self-signed SSL certificate (valid 10 years)
-mkdir -p /etc/nginx/ssl
-openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-  -keyout /etc/nginx/ssl/server.key \
-  -out /etc/nginx/ssl/server.crt \
-  -subj "/C=US/ST=State/L=City/O=Org/CN=server"
-
-# Write Nginx config
-cat > /etc/nginx/conf.d/app.conf << 'EOF'
-# Redirect HTTP to HTTPS
+# Write Nginx config (HTTP only first, Certbot will add HTTPS)
+cat > /etc/nginx/conf.d/app.conf << EOF
 server {
     listen 80;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name _;
-
-    ssl_certificate     /etc/nginx/ssl/server.crt;
-    ssl_certificate_key /etc/nginx/ssl/server.key;
-    ssl_protocols       TLSv1.2 TLSv1.3;
+    server_name ${DOMAIN:-_};
 
     location / {
         proxy_pass         http://localhost:8080;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
     }
 }
 EOF
@@ -64,6 +50,16 @@ EOF
 systemctl start nginx
 systemctl enable nginx
 
-echo "Done. Nginx is running on ports 80 and 443."
-echo "Docker installed. Upload docker-compose.prod.yml to /app/ and set GHCR_TOKEN."
+# Issue Let's Encrypt certificate if domain is provided
+if [ -n "$DOMAIN" ]; then
+  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "admin@${DOMAIN}" --no-redirect
+  echo "SSL certificate issued for $DOMAIN."
+  echo "Certificate auto-renews via certbot timer."
+else
+  echo "No domain provided — running HTTP only."
+  echo "Re-run with: sudo bash setup-ec2.sh your-domain.com"
+fi
+
+echo ""
+echo "Done. Nginx is running."
 echo "Log out and back in for docker group to take effect."
