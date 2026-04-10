@@ -30,6 +30,9 @@ chown ec2-user:ec2-user /app
 # Install Nginx and Certbot
 dnf install -y nginx python3-certbot-nginx
 
+# Remove default Nginx config
+rm -f /etc/nginx/conf.d/default.conf
+
 # Write Nginx config (HTTP only first, Certbot will add HTTPS)
 cat > /etc/nginx/conf.d/app.conf << EOF
 server {
