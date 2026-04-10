@@ -105,10 +105,11 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: GHCR_TOKEN,IMAGE,VERSION,REDIS_PASSWORD
+          envs: GHCR_TOKEN,IMAGE,VERSION,REDIS_PASSWORD,RATE_LIMIT_RPS,RATE_LIMIT_BURST
           script: |
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            echo "REDIS_PASSWORD=$REDIS_PASSWORD" > /app/.env
+            printf "REDIS_PASSWORD=%s\nRATE_LIMIT_RPS=%s\nRATE_LIMIT_BURST=%s\n" \
+              "$REDIS_PASSWORD" "$RATE_LIMIT_RPS" "$RATE_LIMIT_BURST" > /app/.env
             chmod 600 /app/.env
             APP_IMAGE=$IMAGE:$VERSION docker compose -f /app/docker-compose.prod.yml pull
             APP_IMAGE=$IMAGE:$VERSION docker compose -f /app/docker-compose.prod.yml up -d
@@ -117,3 +118,5 @@ jobs:
           IMAGE: ${{ env.IMAGE }}
           VERSION: ${{ github.ref_name }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          RATE_LIMIT_RPS: ${{ secrets.RATE_LIMIT_RPS }}
+          RATE_LIMIT_BURST: ${{ secrets.RATE_LIMIT_BURST }}

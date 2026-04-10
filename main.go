@@ -6,14 +6,42 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 )
 
 const queueKey = "messages"
+
+var limiters sync.Map
+
+func rateLimiter(rps int, burst int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		v, _ := limiters.LoadOrStore(ip, rate.NewLimiter(rate.Limit(rps), burst))
+		limiter := v.(*rate.Limiter)
+		if !limiter.Allow() {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func envInt(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return defaultVal
+}
 
 func main() {
 	redisHost := os.Getenv("REDIS_HOST")
@@ -31,7 +59,11 @@ func main() {
 		Password: os.Getenv("REDIS_PASSWORD"),
 	})
 
+	rps := envInt("RATE_LIMIT_RPS", 10)
+	burst := envInt("RATE_LIMIT_BURST", 10)
+
 	r := gin.Default()
+	r.Use(rateLimiter(rps, burst))
 	r.GET("/health", func(c *gin.Context) {
 		if err := rdb.Ping(context.Background()).Err(); err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "redis unavailable"})
