@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -42,7 +45,15 @@ func main() {
 }
 
 type MessageRequest struct {
-	Text string `json:"text" binding:"required"`
+	Text      string `json:"text"       binding:"required"`
+	CreatedBy string `json:"created_by" binding:"required"`
+}
+
+type Message struct {
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func handleMessage(rdb *redis.Client) gin.HandlerFunc {
@@ -53,12 +64,25 @@ func handleMessage(rdb *redis.Client) gin.HandlerFunc {
 			return
 		}
 
-		if err := rdb.LPush(context.Background(), queueKey, req.Text).Err(); err != nil {
+		msg := Message{
+			ID:        uuid.New().String(),
+			Text:      req.Text,
+			CreatedBy: req.CreatedBy,
+			CreatedAt: time.Now().UTC(),
+		}
+
+		payload, err := json.Marshal(msg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode message"})
+			return
+		}
+
+		if err := rdb.LPush(context.Background(), queueKey, payload).Err(); err != nil {
 			log.Printf("redis error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enqueue message"})
 			return
 		}
 
-		c.JSON(http.StatusAccepted, gin.H{"status": "queued"})
+		c.JSON(http.StatusAccepted, gin.H{"status": "queued", "id": msg.ID})
 	}
 }

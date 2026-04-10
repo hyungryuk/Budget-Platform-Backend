@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
@@ -30,7 +31,7 @@ func TestHandleMessage_Success(t *testing.T) {
 	rdb := newTestRedis(t)
 
 	r := setupRouter(rdb)
-	body, _ := json.Marshal(map[string]string{"text": "hello world"})
+	body, _ := json.Marshal(map[string]string{"text": "hello world", "created_by": "tester"})
 	req := httptest.NewRequest(http.MethodPost, "/messages", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -45,8 +46,28 @@ func TestHandleMessage_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("redis error: %v", err)
 	}
-	if len(items) != 1 || items[0] != "hello world" {
-		t.Fatalf("expected queue to contain 'hello world', got %v", items)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item in queue, got %d", len(items))
+	}
+
+	var msg Message
+	if err := json.Unmarshal([]byte(items[0]), &msg); err != nil {
+		t.Fatalf("failed to decode message: %v", err)
+	}
+	if msg.Text != "hello world" {
+		t.Errorf("expected text 'hello world', got '%s'", msg.Text)
+	}
+	if msg.CreatedBy != "tester" {
+		t.Errorf("expected created_by 'tester', got '%s'", msg.CreatedBy)
+	}
+	if msg.ID == "" {
+		t.Error("expected non-empty id")
+	}
+	if msg.CreatedAt.IsZero() {
+		t.Error("expected non-zero created_at")
+	}
+	if msg.CreatedAt.Location() != time.UTC {
+		t.Errorf("expected UTC timezone, got %s", msg.CreatedAt.Location())
 	}
 }
 
