@@ -17,3 +17,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --save 60 1
+    volumes:
+      - redis-data:/data
+    mem_limit: 128m
+
+volumes:
+  redis-data:
