@@ -36,7 +36,7 @@ rm -f /etc/nginx/conf.d/default.conf
 # Write Nginx config (HTTP only first, Certbot will add HTTPS)
 cat > /etc/nginx/conf.d/app.conf << EOF
 server {
-    listen 80;
+    listen 80 default_server;
     server_name ${DOMAIN:-_};
 
     location / {
